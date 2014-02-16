@@ -9,6 +9,10 @@
 # Shortcuts
 #-------------------------------------------------------------------------------
 IPT=/sbin/iptables
+IPT_RESTORE=/sbin/iptables-restore
+IPT_SAVE=/sbin/iptables-save
+EMPTY_RULES=./iptables.empty.rules
+
 HOST='192.168.7.4'
 IF_HOST='bond0'
 SUBNET_A='10.0.2.0/24'
@@ -24,7 +28,7 @@ BLACK_L=''
 # Host global protection
 #-------------------------------------------------------------------------------
 # Reset
-$IPT -F
+$IPT_RESTORE < $EMPTY_RULES
 # Basic setup
 $IPT -N TCP
 $IPT -N UDP
@@ -54,6 +58,8 @@ $IPT -A IN_SSH -m recent --name sshbf --rttl --rcheck --hitcount 3 --seconds 10 
 $IPT -A IN_SSH -m recent --name sshbf --rttl --rcheck --hitcount 4 --seconds 1800 -j DROP 
 $IPT -A IN_SSH -m recent --name sshbf --set -j ACCEPT
 # TCP and UDP chains
+# Allow access to Proxmox web interface:
+$IPT -A TCP -d $HOST -p tcp -m multiport --dport 8006,5900 -j ACCEPT
 # To accept incoming TCP connections on port 80 for a web server:
 #$IPT -A TCP -p tcp --dport 80 -j ACCEPT
 # To accept incoming TCP connections on port 443 for a web server (HTTPS):
