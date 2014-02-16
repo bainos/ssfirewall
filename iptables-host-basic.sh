@@ -8,7 +8,7 @@
 #-------------------------------------------------------------------------------
 # Shortcuts
 #-------------------------------------------------------------------------------
-IPT='sudo /sbin/iptables'
+IPT=/sbin/iptables
 IPT_RESTORE=/sbin/iptables-restore
 IPT_SAVE=/sbin/iptables-save
 EMPTY_RULES=./iptables-empty.rules
