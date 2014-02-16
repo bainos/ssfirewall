@@ -11,7 +11,7 @@
 IPT=/sbin/iptables
 IPT_RESTORE=/sbin/iptables-restore
 IPT_SAVE=/sbin/iptables-save
-EMPTY_RULES=./iptables.empty.rules
+EMPTY_RULES=./iptables-empty.rules
 
 HOST='192.168.7.4'
 IF_HOST='bond0'
