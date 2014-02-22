@@ -83,6 +83,7 @@ $IPT -A FORWARD -j REJECT --reject-with icmp-host-unreach
 $IPT -P FORWARD DROP
 # Give access to the internet
 $IPT -A fw-interfaces -i $IF_A -j ACCEPT
+$IPT -A fw-interfaces -i $IF_HOST -o $IF_A -j ACCEPT
 $IPT -t nat -A POSTROUTING -s $SUBNET_A -o $IF_HOST -j MASQUERADE
 #$IPT -A fw-interfaces -i $IF_B -j ACCEPT
 #$IPT -t nat -A POSTROUTING -s $SUBNET_B -o $IF_HOST -j MASQUERADE
