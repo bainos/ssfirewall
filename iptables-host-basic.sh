@@ -15,12 +15,15 @@ EMPTY_RULES=./iptables-empty.rules
 
 jLOG='-m limit --limit 5/m --limit-burst 10 -j LOG --log-level info --log-prefix'
 
+# Public
 HOST='192.168.7.4'
-IF_HOST='bond0'
+IF_HOST='vmbr0'
+# Intranet
 SUBNET_A='10.0.2.0/24'
-IF_A='venet0'
-#SUBNET_B='192.168.10.0/24'
-#IF_B='venet1'
+IF_A='vmbr1'
+# DMZ
+SUBNET_B='192.168.0.0/24'
+IF_B='vmbr2'
 # Whitelist
 WHITE_L=''
 # Blacklist
@@ -88,11 +91,13 @@ $IPT -A FORWARD -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
 $IPT -A FORWARD -j fw-interfaces 
 $IPT -A FORWARD -j fw-open 
 $IPT -A FORWARD -j REJECT --reject-with icmp-host-unreach
-## # Give access to the internet
-$IPT -A fw-interfaces -i $IF_A -j ACCEPT
+# Allow traffic from intranet (vmbr1 - 10.0.2.0/24) to the internet
+# Enable traffic through interfaces
+$IPT -A fw-interfaces -i $IF_A -o $IF_HOST -j ACCEPT
+#$IPT -A fw-open -s $SUBNET_A -d ! $SUBNET_B -j ACCEPT
 $IPT -t nat -A POSTROUTING -s $SUBNET_A -o $IF_HOST -j MASQUERADE
-## #$IPT -A fw-interfaces -i $IF_B -j ACCEPT
-## #$IPT -t nat -A POSTROUTING -s $SUBNET_B -o $IF_HOST -j MASQUERADE
+#$IPT -A fw-interfaces -i $IF_B -j ACCEPT
+#$IPT -t nat -A POSTROUTING -s $SUBNET_B -o $IF_HOST -j MASQUERADE
 ## # Set up POSTROUTING chain
 ## #$IPT -A fw-open -d 10.0.2.101 -p tcp --dport 22 -j ACCEPT
 ## #$IPT -t nat -A PREROUTING -i $IF_HOST -p tcp --dport 22 -j DNAT --to 10.0.2.101
