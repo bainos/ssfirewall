@@ -81,8 +81,6 @@ $IPT -A TCP -d $HOST -p tcp --dport ssh -j ACCEPT
 #-------------------------------------------------------------------------------
 # Setting up a NAT gateway
 #-------------------------------------------------------------------------------
-# Reset
-$IPT -t nat -F
 # Basic setup
 $IPT -N fw-interfaces
 $IPT -N fw-open
@@ -90,20 +88,17 @@ $IPT -A FORWARD -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
 $IPT -A FORWARD -j fw-interfaces 
 $IPT -A FORWARD -j fw-open 
 $IPT -A FORWARD -j REJECT --reject-with icmp-host-unreach
-$IPT -P FORWARD DROP
-# Give access to the internet
+## # Give access to the internet
 $IPT -A fw-interfaces -i $IF_A -j ACCEPT
-$IPT -A fw-interfaces -p tcp -i $IF_HOST -o $IF_A -d $SUBNET_A -j ACCEPT
 $IPT -t nat -A POSTROUTING -s $SUBNET_A -o $IF_HOST -j MASQUERADE
-#$IPT -A fw-interfaces -i $IF_B -j ACCEPT
-#$IPT -A fw-interfaces -i $IF_B -j ACCEPT
-#$IPT -t nat -A POSTROUTING -s $SUBNET_B -o $IF_HOST -j MASQUERADE
-# Set up POSTROUTING chain
-#$IPT -A fw-open -d 10.0.2.101 -p tcp --dport 22 -j ACCEPT
-#$IPT -t nat -A PREROUTING -i $IF_HOST -p tcp --dport 22 -j DNAT --to 10.0.2.101
-#$IPT -A fw-open -d 192.168.0.5 -p tcp --dport 22 -j ACCEPT
-#$IPT -t nat -A PREROUTING -i ppp0 -p tcp --dport 22 -j DNAT --to 192.168.0.5
-#$IPT -A fw-open -d 192.168.0.6 -p tcp --dport 80 -j ACCEPT
-#$IPT -t nat -A PREROUTING -i ppp0 -p tcp --dport 8000 -j DNAT --to 192.168.0.6:80
-
-
+## #$IPT -A fw-interfaces -i $IF_B -j ACCEPT
+## #$IPT -t nat -A POSTROUTING -s $SUBNET_B -o $IF_HOST -j MASQUERADE
+## # Set up POSTROUTING chain
+## #$IPT -A fw-open -d 10.0.2.101 -p tcp --dport 22 -j ACCEPT
+## #$IPT -t nat -A PREROUTING -i $IF_HOST -p tcp --dport 22 -j DNAT --to 10.0.2.101
+## #$IPT -A fw-open -d 192.168.0.5 -p tcp --dport 22 -j ACCEPT
+## #$IPT -t nat -A PREROUTING -i ppp0 -p tcp --dport 22 -j DNAT --to 192.168.0.5
+## #$IPT -A fw-open -d 192.168.0.6 -p tcp --dport 80 -j ACCEPT
+## #$IPT -t nat -A PREROUTING -i ppp0 -p tcp --dport 8000 -j DNAT --to 192.168.0.6:80
+## 
+## 
