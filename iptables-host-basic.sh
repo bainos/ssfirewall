@@ -73,6 +73,9 @@ $IPT -A IN_SSH -m recent --name sshbf --set -j TCP
 $IPT -A TCP -d $HOST -p tcp -m multiport --dport 8006,5900 -j ACCEPT
 # Allow SSH connections
 $IPT -A TCP -d $HOST -p tcp --dport ssh -j ACCEPT
+# 
+# Examples
+#
 # To accept incoming TCP connections on port 80 for a web server:
 #$IPT -A TCP -p tcp --dport 80 -j ACCEPT
 # To accept incoming TCP connections on port 443 for a web server (HTTPS):
@@ -91,11 +94,15 @@ $IPT -A FORWARD -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
 $IPT -A FORWARD -j fw-interfaces 
 $IPT -A FORWARD -j fw-open 
 $IPT -A FORWARD -j REJECT --reject-with icmp-host-unreach
-# Allow traffic from intranet (vmbr1 - 10.0.2.0/24) to the internet
-# Enable traffic through interfaces
-$IPT -A fw-interfaces -i $IF_A -o $IF_HOST -j ACCEPT
+# Allow traffic from DMZ (vmbr1 - 192.168.0.0/24) to the internet
+# # Enable outgoing traffic through interfaces related to DMZ
+$IPT -A fw-interfaces -i $IF_B -o $IF_HOST -j ACCEPT
+# # Allow outgoing traffic
+$IPT -t nat -A POSTROUTING -s $SUBNET_B -o $IF_HOST -j MASQUERADE
+# 
+# Examples
+#
 #$IPT -A fw-open -s $SUBNET_A -d ! $SUBNET_B -j ACCEPT
-$IPT -t nat -A POSTROUTING -s $SUBNET_A -o $IF_HOST -j MASQUERADE
 #$IPT -A fw-interfaces -i $IF_B -j ACCEPT
 #$IPT -t nat -A POSTROUTING -s $SUBNET_B -o $IF_HOST -j MASQUERADE
 ## # Set up POSTROUTING chain
