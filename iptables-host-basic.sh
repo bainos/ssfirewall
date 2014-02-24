@@ -8,29 +8,44 @@
 #-------------------------------------------------------------------------------
 # Shortcuts
 #-------------------------------------------------------------------------------
+# Iptables
 IPT=/sbin/iptables
 IPT_RESTORE=/sbin/iptables-restore
 IPT_SAVE=/sbin/iptables-save
 EMPTY_RULES=./iptables-empty.rules
-
 jLOG='-m limit --limit 5/m --limit-burst 10 -j LOG --log-level info --log-prefix'
 
+# Networks
+# Subnet reminder:
+# xxx.xxx.xxx.96/29
+# 	netmask: 255.255.255.248
+# 	usable IPs (6):  xxx.xxx.xxx.97 -> xxx.xxx.xxx.102
+# xxx.xxx.xxx.96/28
+# 	netmask: 255.255.255.240
+# 	usable IPs (14): xxx.xxx.xxx.97 -> xxx.xxx.xxx.110
+# xxx.xxx.xxx.96/27
+# 	netmask: 255.255.255.224
+# 	usable IPs (30): xxx.xxx.xxx.97 -> xxx.xxx.xxx.126
 # Public
 HOST='192.168.7.4'
-GATEWAY='192.168.7.1'
-IF_HOST='vmbr0'
-# Intranet
-SUBNET_A='10.0.2.0/24'
-GATEWAY_A='10.0.2.1'
-IF_A='vmbr1'
+HOST_GW='192.168.7.1'
+HOST_IF='vmbr0'
 # DMZ
-SUBNET_B='192.168.0.0/24'
-GATEWAY_B='192.168.0.1'
-IF_B='vmbr2'
+DMZ='192.168.0.96/29'
+DMZ_GW='192.168.0.1'
+DMZ_IF='vmbr2'
+# Intranet
+INTRANET='10.0.2.96/29'
+INTRANET_GW='10.0.2.1'
+INTRANET_IF='vmbr1'
 # Whitelist
 WHITE_L=''
 # Blacklist
 BLACK_L=''
+
+# Globals
+proxmox_ports='8006,5900'
+pp_agent_ports='8140,61613'
 
 #-------------------------------------------------------------------------------
 # Host global protection
@@ -40,7 +55,7 @@ $IPT_RESTORE < $EMPTY_RULES
 # Basic setup
 $IPT -N TCP
 $IPT -N UDP
-$IPT -N IN_SSH
+$IPT -N SSH
 $IPT -N LOGDROP
 # Basic policy
 $IPT -P FORWARD DROP
@@ -53,7 +68,7 @@ $IPT -A INPUT -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
 $IPT -A INPUT -i lo -j ACCEPT
 $IPT -A INPUT -m conntrack --ctstate INVALID -j DROP
 $IPT -A INPUT -p icmp --icmp-type 8 -m conntrack --ctstate NEW -j ACCEPT
-$IPT -A INPUT -p tcp --dport ssh -m conntrack --ctstate NEW -j IN_SSH
+$IPT -A INPUT -p tcp --dport ssh -m conntrack --ctstate NEW -j SSH
 $IPT -A INPUT -p udp -m conntrack --ctstate NEW -j UDP
 $IPT -A INPUT -p tcp --syn -m conntrack --ctstate NEW -j TCP
 #$IPT -A INPUT -j LOGDROP
@@ -66,68 +81,41 @@ $IPT -A INPUT -j REJECT --reject-with icmp-proto-unreachable
 # allow for three connection packets in ten seconds. Further tries in that time
 # will blacklist the IP. The next rule adds a quirk by allowing a total of four
 # attempts in 30 minutes.
-$IPT -A IN_SSH -m recent --name sshbf --rttl --rcheck --hitcount 3 --seconds 10 -j DROP
-$IPT -A IN_SSH -m recent --name sshbf --rttl --rcheck --hitcount 4 --seconds 1800 -j LOGDROP 
-$IPT -A IN_SSH $jLOG '(SSFW)[IN_SSH]: '
-$IPT -A IN_SSH -m recent --name sshbf --set -j TCP
+$IPT -A SSH -m recent --name sshbf \
+	--rttl --rcheck --hitcount 3 --seconds 10 -j DROP
+$IPT -A SSH -m recent --name sshbf \
+	--rttl --rcheck --hitcount 4 --seconds 1800 -j LOGDROP 
+$IPT -A SSH $jLOG '(SSFW)[SSH]: '
+$IPT -A SSH -m recent --name sshbf --set -j TCP
 # TCP and UDP chains
 # Allow access to Proxmox web interface:
-$IPT -A TCP -d $HOST -p tcp -m multiport --dport 8006,5900 -j ACCEPT
+$IPT -A TCP -d $HOST -p tcp -m multiport --dport $proxmox_ports -j ACCEPT
 # Allow SSH connections
 $IPT -A TCP -d $HOST -p tcp --dport ssh -j ACCEPT
 # Allow access to PEConsole
 $IPT -A TCP -d $HOST -p tcp --dport https -j ACCEPT
 # Allow puppet-agent
-$IPT -A TCP -s 10.0.2.100 -d 10.0.2.1 -p tcp --dport 8140 -j ACCEPT
-# 
-# Examples
-#
-# To accept incoming TCP connections on port 443 for a web server (HTTPS):
-#$IPT -A TCP -p tcp --dport 443 -j ACCEPT
-# To allow remote SSH connections (on port 22):
-#$IPT -A TCP -p tcp --dport 22 -j ACCEPT
-# To accept incoming UDP streams on port 53 for a DNS server:
-#$IPT -A UDP -p udp --dport 53 -j ACCEPT
+$IPT -A TCP -i $INTRANET_IF \
+	-s $INTRANET -d $INTRANET_GW \
+	-p tcp -m miltiport --dport $pp_agent_ports -j ACCEPT
+$IPT -A TCP -i $INTRANET_IF $jLOG '(SSFW)[Intranet]: '
 #-------------------------------------------------------------------------------
 # Setting up a NAT gateway
 #-------------------------------------------------------------------------------
 # Basic setup
-$IPT -N fw-interfaces
 $IPT -N fw-open
 $IPT -A FORWARD -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
-$IPT -A FORWARD -j fw-interfaces 
 $IPT -A FORWARD -j fw-open 
 $IPT -A FORWARD -j REJECT --reject-with icmp-host-unreach
-# Allow traffic from DMZ (vmbr1 - 192.168.0.0/24) to the internet
-# # Enable outgoing traffic through interfaces related to DMZ
-#$IPT -A fw-interfaces -i $IF_B -o $IF_HOST -j ACCEPT
 # # Allow outgoing traffic
-$IPT -t nat -A POSTROUTING -s $SUBNET_B -o $IF_HOST -j MASQUERADE
+$IPT -t nat -A POSTROUTING -o $HOST_IF -s $DMZ -j MASQUERADE
 # Allowed traffic for DMZ
-$IPT -A fw-open -i $IF_B -o $IF_HOST -p tcp --dport 80 -j ACCEPT
-$IPT -A fw-open -i $IF_B -o $IF_HOST -d $GATEWAY -p udp --dport 53 -j ACCEPT
-$IPT -A fw-open -i $IF_B $jLOG '(SSFW)[debug]: '
+$IPT -A fw-open -i $DMZ_IF -o $HOST_IF \
+	-s $DMZ -p tcp --dport 80 -j ACCEPT
+$IPT -A fw-open -i $DMZ_IF -o $HOST_IF \
+	-s $DMZ -d $HOST_GW -p udp --dport 53 -j ACCEPT
+$IPT -A fw-open -i $DMZ_IF $jLOG '(SSFW)[DMZ]: '
 # Allowed traffic for Internal LAN
-$IPT -A fw-open -i $IF_A -o $IF_B -s 10.0.2.100 -d 192.168.0.100 -p tcp --dport 3142 -j ACCEPT
-# # Enable outgoing traffic through interfaces
-#$IPT -A fw-interfaces -i $IF_A -o $IF_HOST -j ACCEPT
-#$IPT -A fw-interfaces -i $IF_A -o $IF_B -j ACCEPT
-#$IPT -A fw-interfaces -i $IF_B -o $IF_A -j ACCEPT
-# # Allow outgoing traffic
-$IPT -A fw-open -i $IF_A $jLOG '(SSFW)[proxy:forward:SRC]: '
-$IPT -A fw-open -o $IF_A $jLOG '(SSFW)[proxy:forward:DST]: '
-# 
-# Examples
-#
-#$IPT -A fw-open -s $SUBNET_A -d ! $SUBNET_B -j ACCEPT
-#$IPT -A fw-interfaces -i $IF_B -j ACCEPT
-#$IPT -t nat -A POSTROUTING -s $SUBNET_B -o $IF_HOST -j MASQUERADE
-## # Set up POSTROUTING chain
-## #$IPT -A fw-open -d 10.0.2.101 -p tcp --dport 22 -j ACCEPT
-## #$IPT -t nat -A PREROUTING -i $IF_HOST -p tcp --dport 22 -j DNAT --to 10.0.2.101
-## #$IPT -A fw-open -d 192.168.0.5 -p tcp --dport 22 -j ACCEPT
-## #$IPT -t nat -A PREROUTING -i ppp0 -p tcp --dport 22 -j DNAT --to 192.168.0.5
-## #$IPT -A fw-open -d 192.168.0.6 -p tcp --dport 80 -j ACCEPT
-## #$IPT -t nat -A PREROUTING -i ppp0 -p tcp --dport 8000 -j DNAT --to 192.168.0.6:80
-## 
-## 
+# apt-cacher
+$IPT -A fw-open -i $INTRANET_IF -o $DMZ_IF -s $INTRANET -d 192.168.0.100 -p tcp --dport 3142 -j ACCEPT
+$IPT -A fw-open -i $INTRANET_IF $jLOG '(SSFW)[Intranet]: '
