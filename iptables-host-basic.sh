@@ -97,7 +97,7 @@ $IPT -A TCP -d $HOST -p tcp --dport https -j ACCEPT
 # Allow puppet-agent
 $IPT -A TCP -i $INTRANET_IF \
 	-s $INTRANET -d $INTRANET_GW \
-	-p tcp -m miltiport --dport $pp_agent_ports -j ACCEPT
+	-p tcp -m multiport --dport $pp_agent_ports -j ACCEPT
 $IPT -A TCP -i $INTRANET_IF $jLOG '(SSFW)[Intranet]: '
 #-------------------------------------------------------------------------------
 # Setting up a NAT gateway
