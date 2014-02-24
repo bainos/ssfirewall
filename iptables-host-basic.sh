@@ -17,12 +17,15 @@ jLOG='-m limit --limit 5/m --limit-burst 10 -j LOG --log-level info --log-prefix
 
 # Public
 HOST='192.168.7.4'
+GATEWAY='192.168.7.1'
 IF_HOST='vmbr0'
 # Intranet
 SUBNET_A='10.0.2.0/24'
+GATEWAY_A='10.0.2.1'
 IF_A='vmbr1'
 # DMZ
 SUBNET_B='192.168.0.0/24'
+GATEWAY_B='192.168.0.1'
 IF_B='vmbr2'
 # Whitelist
 WHITE_L=''
@@ -67,17 +70,18 @@ $IPT -A IN_SSH -m recent --name sshbf --rttl --rcheck --hitcount 3 --seconds 10 
 $IPT -A IN_SSH -m recent --name sshbf --rttl --rcheck --hitcount 4 --seconds 1800 -j LOGDROP 
 $IPT -A IN_SSH $jLOG '(SSFW)[IN_SSH]: '
 $IPT -A IN_SSH -m recent --name sshbf --set -j TCP
-#$IPT -A IN_SSH -m recent --name sshbf --set -j ACCEPT
 # TCP and UDP chains
 # Allow access to Proxmox web interface:
 $IPT -A TCP -d $HOST -p tcp -m multiport --dport 8006,5900 -j ACCEPT
 # Allow SSH connections
 $IPT -A TCP -d $HOST -p tcp --dport ssh -j ACCEPT
+# Allow access to PEConsole
+$IPT -A TCP -d $HOST -p tcp --dport https -j ACCEPT
+# Allow puppet-agent
+$IPT -A TCP -s 10.0.2.100 -d 10.0.2.1 -p tcp --dport 8140 -j ACCEPT
 # 
 # Examples
 #
-# To accept incoming TCP connections on port 80 for a web server:
-#$IPT -A TCP -p tcp --dport 80 -j ACCEPT
 # To accept incoming TCP connections on port 443 for a web server (HTTPS):
 #$IPT -A TCP -p tcp --dport 443 -j ACCEPT
 # To allow remote SSH connections (on port 22):
@@ -96,9 +100,22 @@ $IPT -A FORWARD -j fw-open
 $IPT -A FORWARD -j REJECT --reject-with icmp-host-unreach
 # Allow traffic from DMZ (vmbr1 - 192.168.0.0/24) to the internet
 # # Enable outgoing traffic through interfaces related to DMZ
-$IPT -A fw-interfaces -i $IF_B -o $IF_HOST -j ACCEPT
+#$IPT -A fw-interfaces -i $IF_B -o $IF_HOST -j ACCEPT
 # # Allow outgoing traffic
 $IPT -t nat -A POSTROUTING -s $SUBNET_B -o $IF_HOST -j MASQUERADE
+# Allowed traffic for DMZ
+$IPT -A fw-open -i $IF_B -o $IF_HOST -p tcp --dport 80 -j ACCEPT
+$IPT -A fw-open -i $IF_B -o $IF_HOST -d $GATEWAY -p udp --dport 53 -j ACCEPT
+$IPT -A fw-open -i $IF_B $jLOG '(SSFW)[debug]: '
+# Allowed traffic for Internal LAN
+$IPT -A fw-open -i $IF_A -o $IF_B -s 10.0.2.100 -d 192.168.0.100 -p tcp --dport 3142 -j ACCEPT
+# # Enable outgoing traffic through interfaces
+#$IPT -A fw-interfaces -i $IF_A -o $IF_HOST -j ACCEPT
+#$IPT -A fw-interfaces -i $IF_A -o $IF_B -j ACCEPT
+#$IPT -A fw-interfaces -i $IF_B -o $IF_A -j ACCEPT
+# # Allow outgoing traffic
+$IPT -A fw-open -i $IF_A $jLOG '(SSFW)[proxy:forward:SRC]: '
+$IPT -A fw-open -o $IF_A $jLOG '(SSFW)[proxy:forward:DST]: '
 # 
 # Examples
 #
