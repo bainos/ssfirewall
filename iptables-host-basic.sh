@@ -45,6 +45,7 @@ BLACK_L=''
 
 # Globals
 proxmox_ports='8006,5900'
+puppet_master='192.168.0.100'
 pp_agent_ports='8140,61613'
 
 #-------------------------------------------------------------------------------
@@ -93,11 +94,7 @@ $IPT -A TCP -d $HOST -p tcp -m multiport --dport $proxmox_ports -j ACCEPT
 # Allow SSH connections
 $IPT -A TCP -d $HOST -p tcp --dport ssh -j ACCEPT
 # Allow access to PEConsole
-$IPT -A TCP -d $HOST -p tcp --dport https -j ACCEPT
-# Allow puppet-agent
-$IPT -A TCP -i $INTRANET_IF \
-	-s $INTRANET -d $INTRANET_GW \
-	-p tcp -m multiport --dport $pp_agent_ports -j ACCEPT
+$IPT -A TCP -d $HOST -p tcp --dport 4443 -j ACCEPT
 $IPT -A TCP -i $INTRANET_IF $jLOG '(SSFW)[Intranet]: '
 #-------------------------------------------------------------------------------
 # Setting up a NAT gateway
@@ -111,11 +108,18 @@ $IPT -A FORWARD -j REJECT --reject-with icmp-host-unreach
 $IPT -t nat -A POSTROUTING -o $HOST_IF -s $DMZ -j MASQUERADE
 # Allowed traffic for DMZ
 $IPT -A fw-open -i $DMZ_IF -o $HOST_IF \
-	-s $DMZ -p tcp --dport 80 -j ACCEPT
+	-s $DMZ -p tcp --dport http -j ACCEPT
 $IPT -A fw-open -i $DMZ_IF -o $HOST_IF \
 	-s $DMZ -d $HOST_GW -p udp --dport 53 -j ACCEPT
 $IPT -A fw-open -i $DMZ_IF $jLOG '(SSFW)[DMZ]: '
+# Allow PEConsole on port 4443
+$IPT -A fw-open -i $HOST_IF -o $DMZ_IF -d $puppet_master -p tcp --dport https -j ACCEPT
+$IPT -t nat -A PREROUTING -i $HOST_IF -p tcp --dport 4443 -j DNAT --to $puppet_master:443
 # Allowed traffic for Internal LAN
+# puppet-agent
+$IPT -A fw-open -i $INTRANET_IF \
+	-s $INTRANET -d $puppet_master \
+	-p tcp -m multiport --dport $pp_agent_ports -j ACCEPT
 # apt-cacher
-$IPT -A fw-open -i $INTRANET_IF -o $DMZ_IF -s $INTRANET -d 192.168.0.100 -p tcp --dport 3142 -j ACCEPT
+$IPT -A fw-open -i $INTRANET_IF -o $DMZ_IF -s $INTRANET -d $puppet_master -p tcp --dport 3142 -j ACCEPT
 $IPT -A fw-open -i $INTRANET_IF $jLOG '(SSFW)[Intranet]: '
